@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useRouter } from 'next/navigation';
 import { authService } from '@/views/auth/services/auth';
+import { useAuthStore } from '@/shared/stores';
 import { RegisterDto } from '@/views/auth/types';
 
 export const AuthView = () => {
@@ -12,12 +13,14 @@ export const AuthView = () => {
   const router = useRouter();
 
   const { register, handleSubmit, watch, formState: { errors, isSubmitting } } = useForm<RegisterDto>();
+  const setUser = useAuthStore(state => state.setUser);
 
   const onSubmit = async (data: RegisterDto) => {
     setError(null);
     try {
       if (isLogin) {
-        await authService.login({ email: data.email, password: data.password });
+        const res = await authService.login({ email: data.email, password: data.password });
+        setUser(res.user);
       } else {
         const { confirmPassword: _, ...registerData } = data;
         
@@ -25,10 +28,11 @@ export const AuthView = () => {
           delete registerData.companyDomain;
         }
         
-        await authService.register(registerData);
+        const res = await authService.register(registerData);
+        setUser(res.user);
       }
       
-      router.push('/dashboard'); 
+      router.push('/'); 
     } catch (err: unknown) {
       if (err instanceof Error) {
         setError(err.message);

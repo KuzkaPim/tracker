@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 
 const API_URL = 'https://hubnity.automatonsoft.de/api';
 
@@ -15,11 +16,15 @@ async function proxy(req: Request, { params }: { params: Promise<{ path: string[
       ? await req.blob() 
       : null;
 
+    const cookieStore = await cookies();
+    const token = cookieStore.get('accessToken')?.value;
+    const authHeader = req.headers.get('Authorization') || (token ? `Bearer ${token}` : '');
+
     const res = await fetch(targetUrl, {
       method: req.method,
       headers: {
         'Content-Type': req.headers.get('Content-Type') || 'application/json',
-        'Authorization': req.headers.get('Authorization') || '',
+        'Authorization': authHeader,
         'Accept': 'application/json',
       },
       body: body,
