@@ -4,9 +4,10 @@ interface TrackerOptions {
   intervalMs: number;
   uploadUrl: string;
   timeEntryId: string | null;
+  onTrackEnded?: () => void; // Callback когда пользователь прекращает доступ через браузер
 }
 
-export const useScreenTracker = ({ intervalMs, uploadUrl, timeEntryId }: TrackerOptions) => {
+export const useScreenTracker = ({ intervalMs, uploadUrl, timeEntryId, onTrackEnded }: TrackerOptions) => {
   const [isTracking, setIsTracking] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -46,8 +47,12 @@ export const useScreenTracker = ({ intervalMs, uploadUrl, timeEntryId }: Tracker
 
       // Если юзер нажал "Закрыть доступ" в браузере — останавливаем всё
       mediaStream.getVideoTracks()[0].onended = () => {
-        console.log('🛑 [useScreenTracker] Track ended (user revoked access)');
+        console.log('🛑 [useScreenTracker] Track ended (user revoked access via browser)');
         stopTracking();
+        // Вызываем callback для остановки таймера
+        if (onTrackEnded) {
+          onTrackEnded();
+        }
       };
       
       console.log('✨ [useScreenTracker] Tracking started successfully');

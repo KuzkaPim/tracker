@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { useAuthStore, useTrackerStore } from '@/shared/stores';
 import { useScreenTracker } from '@/shared/hooks';
 import { Timer, ProjectSelector, ScreenshotGallery } from '@/views/dashboard/blocks';
@@ -29,13 +29,27 @@ export const Dashboard = () => {
     totalSeconds 
   } = useTrackerStore();
 
-  const { startTracking, stopTracking, videoRef, isTracking } = useScreenTracker({
-    intervalMs: 10000,  // 1000 * 60 * 5
-    uploadUrl: '/api/proxy/screenshots',
-    timeEntryId: timeEntryId
-  });
+  const { stopTimer } = useTrackerStore();
 
   const [isStarting, setIsStarting] = useState(false);
+  
+  // Флаг для предотвращения авто-рестарта после ручной остановки
+  const wasStoppedManuallyRef = useRef(false);
+
+  // Обработчик остановки через браузер
+  const handleBrowserStop = useCallback(() => {
+    console.log('🛑 [Dashboard] Browser stopped sharing, stopping timer...');
+    wasStoppedManuallyRef.current = true;
+    stopTimer();
+  }, [stopTimer]);
+
+  // Хук для трекинга экрана с callback для остановки
+  const { startTracking, stopTracking, videoRef, isTracking } = useScreenTracker({
+    intervalMs: 10000,
+    uploadUrl: '/api/proxy/screenshots',
+    timeEntryId: timeEntryId,
+    onTrackEnded: handleBrowserStop
+  });
 
   // 1. Инициализация данных при загрузке
   useEffect(() => { 
@@ -45,20 +59,18 @@ export const Dashboard = () => {
 
   // 2. Управление записью экрана
   // Эффект теперь нужен только для RESUME (если обновили страницу и таймер уже идет)
-  // Мы проверяем !isTracking чтобы не запускать второй раз
   useEffect(() => {
-    if (isRunning && timeEntryId && !isPaused) {
-      if (!isTracking) {
-         // Тут можно было бы добавить проверку "это рефреш или новый старт?",
-         // но пока оставим авто-старт для возобновления.
-         // Но! Важный момент: при НОВОМ старте мы вызовем startTracking вручную ДО старта таймера.
-         startTracking(); 
+    // Сбрасываем флаг ручной остановки при новом старте
+    if (isRunning && !wasStoppedManuallyRef.current) {
+      if (!isTracking && !isStarting) {
+        startTracking(); 
       }
-    } else {
-      // Останавливаем ТОЛЬКО если мы не в процессе ручного старта
+    } else if (!isRunning) {
+      // Сбрасываем флаг когда таймер реально остановлен
+      wasStoppedManuallyRef.current = false;
       if (isTracking && !isStarting) stopTracking();
     }
-  }, [isRunning, timeEntryId, isPaused, isTracking, startTracking, stopTracking, isStarting]);
+  }, [isRunning, isTracking, startTracking, stopTracking, isStarting]);
 
   // 3. Ручной старт таймера (Сначала экран -> Потом таймер)
   const handleStartTimer = async () => {
