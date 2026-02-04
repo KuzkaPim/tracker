@@ -13,7 +13,6 @@ export const AuthGuard = ({ children }: AuthGuardProps) => {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const [ready, setReady] = useState(false);
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { setReady(true); }, []);
 
   useEffect(() => {

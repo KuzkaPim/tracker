@@ -34,7 +34,6 @@ export const ScreenshotGallery = ({ timeEntryId }: ScreenshotGalleryProps) => {
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data)) {
-          // Сортируем по времени (новые первые) и берем 6 последних
           const sorted = data.sort((a: Screenshot, b: Screenshot) => 
             new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
           );
@@ -50,12 +49,10 @@ export const ScreenshotGallery = ({ timeEntryId }: ScreenshotGalleryProps) => {
     }
   }, [timeEntryId]);
 
-  // Загружаем при смене timeEntryId
   useEffect(() => {
     fetchScreenshots();
   }, [fetchScreenshots]);
 
-  // Авто-обновление каждые 10 секунд (чаще, чтобы видеть новые скрины)
   useEffect(() => {
     if (!timeEntryId) return;
     
@@ -67,7 +64,6 @@ export const ScreenshotGallery = ({ timeEntryId }: ScreenshotGalleryProps) => {
     return null;
   }
 
-  // Добавляем базовый URL к путям картинок
   const getImageUrl = (path: string) => {
     if (path.startsWith('http')) return path;
     return `${API_URL}${path}`;
@@ -113,7 +109,6 @@ export const ScreenshotGallery = ({ timeEntryId }: ScreenshotGalleryProps) => {
                 onClick={() => setSelectedImage(getImageUrl(screenshot.imageUrl))}
                 className="relative aspect-video rounded-lg overflow-hidden bg-gray-100 hover:ring-2 hover:ring-blue-400 transition-all group"
               >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={getImageUrl(screenshot.thumbnailUrl || screenshot.imageUrl)}
                   alt={`Скриншот ${formatTime(screenshot.timestamp)}`}
@@ -129,7 +124,6 @@ export const ScreenshotGallery = ({ timeEntryId }: ScreenshotGalleryProps) => {
         )}
       </div>
 
-      {/* Модальное окно для полноразмерного просмотра */}
       {selectedImage && (
         <div 
           className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4"
@@ -144,7 +138,6 @@ export const ScreenshotGallery = ({ timeEntryId }: ScreenshotGalleryProps) => {
               <line x1="6" y1="6" x2="18" y2="18"/>
             </svg>
           </button>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={selectedImage}
             alt="Полноразмерный скриншот"

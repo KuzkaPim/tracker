@@ -18,7 +18,6 @@ export const useAuthStore = create<AuthState>()(
       setUser: (user) => set({ user, isAuthenticated: !!user }),
       logout: () => {
         set({ user: null, isAuthenticated: false });
-        // Сбрасываем трекер при выходе, чтобы новый юзер не увидел старый таймер
         useTrackerStore.getState().reset();
       },
     }),

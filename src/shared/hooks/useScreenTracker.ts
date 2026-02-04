@@ -4,7 +4,7 @@ interface TrackerOptions {
   intervalMs: number;
   uploadUrl: string;
   timeEntryId: string | null;
-  onTrackEnded?: () => void; // Callback когда пользователь прекращает доступ через браузер
+  onTrackEnded?: () => void;
 }
 
 export const useScreenTracker = ({ intervalMs, uploadUrl, timeEntryId, onTrackEnded }: TrackerOptions) => {
@@ -12,20 +12,16 @@ export const useScreenTracker = ({ intervalMs, uploadUrl, timeEntryId, onTrackEn
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
-  
-  // ЗАЩИТА: Флаг, что мы прямо сейчас ждем выбора окна
   const isRequestingRef = useRef(false);
 
-  // 1. Запуск захвата
   const startTracking = useCallback(async (): Promise<boolean> => {
-    // Если уже трекаем ИЛИ если прямо сейчас запрашиваем права — выходим
     if (isTracking || isRequestingRef.current) {
         console.log(`⚠️ [useScreenTracker] Early exit: isTracking=${isTracking}, isRequesting=${isRequestingRef.current}`);
         return true; 
     }
 
     console.log('🖥 [useScreenTracker] Requesting display media...');
-    isRequestingRef.current = true; // Ставим блокировку
+    isRequestingRef.current = true;
 
     try {
       const mediaStream = await navigator.mediaDevices.getDisplayMedia({
@@ -45,39 +41,33 @@ export const useScreenTracker = ({ intervalMs, uploadUrl, timeEntryId, onTrackEn
 
       setIsTracking(true);
 
-      // Если юзер нажал "Закрыть доступ" в браузере — останавливаем всё
       mediaStream.getVideoTracks()[0].onended = () => {
         console.log('🛑 [useScreenTracker] Track ended (user revoked access via browser)');
         stopTracking();
-        // Вызываем callback для остановки таймера
         if (onTrackEnded) {
           onTrackEnded();
         }
       };
       
       console.log('✨ [useScreenTracker] Tracking started successfully');
-      return true; // УСПЕХ
+      return true;
 
     } catch (err) {
       console.error("❌ [useScreenTracker] Error/Cancel:", err);
-      // Если ошибка или отмена — просто снимаем флаг трекинга,
       setIsTracking(false); 
       return false; 
     } finally {
       console.log('🔒 [useScreenTracker] Releasing request lock');
-      // Снимаем блокировку запроса в любом случае
       isRequestingRef.current = false;
     }
   }, [isTracking]);
 
-  // 2. Сделать скриншот
   const takeScreenshot = useCallback(async () => {
     if (!videoRef.current || !streamRef.current || !timeEntryId) return;
 
     const canvas = document.createElement('canvas');
     const video = videoRef.current;
     
-    // Проверка, что видео реально идет (width > 0)
     if (video.videoWidth === 0 || video.videoHeight === 0) return;
 
     canvas.width = video.videoWidth;
@@ -88,7 +78,6 @@ export const useScreenTracker = ({ intervalMs, uploadUrl, timeEntryId, onTrackEn
 
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-    // Конвертируем в base64 data URI (jpeg для уменьшения размера)
     const imageData = canvas.toDataURL('image/jpeg', 0.5);
 
     console.log(`📸 Отправка скриншота (${Math.round(imageData.length / 1024)} KB)...`);
@@ -112,13 +101,9 @@ export const useScreenTracker = ({ intervalMs, uploadUrl, timeEntryId, onTrackEn
     }
   }, [timeEntryId, uploadUrl]);
 
-  // 3. Управление таймером съемки
   useEffect(() => {
     if (isTracking && timeEntryId) {
-      // Делаем первый скриншот сразу через 2 секунды после старта
       const initialTimeout = setTimeout(takeScreenshot, 2000);
-      
-      // И далее по интервалу
       intervalRef.current = setInterval(takeScreenshot, intervalMs);
       
       return () => {
@@ -130,11 +115,10 @@ export const useScreenTracker = ({ intervalMs, uploadUrl, timeEntryId, onTrackEn
     }
   }, [isTracking, timeEntryId, intervalMs, takeScreenshot]);
 
-  // 4. Остановка
   const stopTracking = useCallback(() => {
     console.log('⏹ Остановка трекинга экрана');
     setIsTracking(false);
-    isRequestingRef.current = false; // На всякий случай сбрасываем
+    isRequestingRef.current = false;
 
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => track.stop());

@@ -28,8 +28,6 @@ async function proxy(req: Request, { params }: { params: Promise<{ path: string[
         'Accept': 'application/json',
       },
       body: body,
-	  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-	  // @ts-expect-error
       duplex: 'half', 
     });
 

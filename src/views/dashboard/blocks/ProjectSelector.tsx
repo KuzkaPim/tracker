@@ -24,7 +24,7 @@ export const ProjectSelector = ({ onSelect }: Props) => {
 
   const fetchProjects = async () => {
     try {
-      const res = await fetch('/api/proxy/projects'); // GET
+      const res = await fetch('/api/proxy/projects');
       if (res.ok) {
         const data = await res.json();
         setProjects(data);
