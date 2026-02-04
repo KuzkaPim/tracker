@@ -83,24 +83,28 @@ export const useScreenTracker = ({ intervalMs, uploadUrl, timeEntryId }: Tracker
 
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-    canvas.toBlob(async (blob) => {
-      if (!blob) return;
+    // Конвертируем в base64 data URI (jpeg для уменьшения размера)
+    const imageData = canvas.toDataURL('image/jpeg', 0.5);
 
-      const formData = new FormData();
-      formData.append('screenshot', blob, `screen-${Date.now()}.jpg`);
-      formData.append('timeEntryId', timeEntryId); 
+    console.log(`📸 Отправка скриншота (${Math.round(imageData.length / 1024)} KB)...`);
 
-      console.log(`📸 Отправка скриншота...`);
-
-      try {
-        await fetch(uploadUrl, {
-          method: 'POST',
-          body: formData,
-        });
-      } catch (e) {
-        console.error('Ошибка отправки:', e);
+    try {
+      const res = await fetch(uploadUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          imageData,
+          timeEntryId,
+        }),
+      });
+      
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        console.error('Ошибка отправки скриншота:', error);
       }
-    }, 'image/jpeg', 0.6);
+    } catch (e) {
+      console.error('Ошибка отправки:', e);
+    }
   }, [timeEntryId, uploadUrl]);
 
   // 3. Управление таймером съемки
