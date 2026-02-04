@@ -1,9 +1,9 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 
 interface TrackerOptions {
-  intervalMs: number; // Интервал в мс (например, 60000 = 1 минута)
-  uploadUrl: string;  // '/api/proxy/screenshots'
-  timeEntryId: string | null; // ID текущей задачи
+  intervalMs: number;
+  uploadUrl: string;
+  timeEntryId: string | null;
 }
 
 export const useScreenTracker = ({ intervalMs, uploadUrl, timeEntryId }: TrackerOptions) => {
@@ -11,49 +11,70 @@ export const useScreenTracker = ({ intervalMs, uploadUrl, timeEntryId }: Tracker
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // ЗАЩИТА: Флаг, что мы прямо сейчас ждем выбора окна
+  const isRequestingRef = useRef(false);
 
-  // 1. Запуск захвата (вызывает окно браузера)
-  const startTracking = async () => {
+  // 1. Запуск захвата
+  const startTracking = useCallback(async (): Promise<boolean> => {
+    // Если уже трекаем ИЛИ если прямо сейчас запрашиваем права — выходим
+    if (isTracking || isRequestingRef.current) {
+        console.log(`⚠️ [useScreenTracker] Early exit: isTracking=${isTracking}, isRequesting=${isRequestingRef.current}`);
+        return true; 
+    }
+
+    console.log('🖥 [useScreenTracker] Requesting display media...');
+    isRequestingRef.current = true; // Ставим блокировку
+
     try {
-      if (isTracking) return; // Уже запущено
-
       const mediaStream = await navigator.mediaDevices.getDisplayMedia({
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        video: { displaySurface: 'monitor' } as any, // Подсказка браузеру
+        video: true,
         audio: false,
       });
 
+      console.log('✅ [useScreenTracker] Stream acquired');
       streamRef.current = mediaStream;
 
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream;
-        videoRef.current.play();
+        videoRef.current.play(); 
+      } else {
+        console.error('❌ [useScreenTracker] videoRef.current is null!');
       }
 
       setIsTracking(true);
 
-      // Если юзер сам нажал "Закрыть доступ" в браузере
+      // Если юзер нажал "Закрыть доступ" в браузере — останавливаем всё
       mediaStream.getVideoTracks()[0].onended = () => {
+        console.log('🛑 [useScreenTracker] Track ended (user revoked access)');
         stopTracking();
       };
+      
+      console.log('✨ [useScreenTracker] Tracking started successfully');
+      return true; // УСПЕХ
 
     } catch (err) {
-      console.error("Отмена захвата экрана или ошибка:", err);
-      setIsTracking(false);
+      console.error("❌ [useScreenTracker] Error/Cancel:", err);
+      // Если ошибка или отмена — просто снимаем флаг трекинга,
+      setIsTracking(false); 
+      return false; 
+    } finally {
+      console.log('🔒 [useScreenTracker] Releasing request lock');
+      // Снимаем блокировку запроса в любом случае
+      isRequestingRef.current = false;
     }
-  };
+  }, [isTracking]);
 
-  // 2. Сделать скриншот и отправить
-  const takeScreenshot = async () => {
-    // Если нет видео, потока или ID задачи — не фоткаем
-    if (!videoRef.current || !streamRef.current || !timeEntryId) {
-        console.log("Скриншот пропущен: нет ID задачи или потока");
-        return;
-    }
+  // 2. Сделать скриншот
+  const takeScreenshot = useCallback(async () => {
+    if (!videoRef.current || !streamRef.current || !timeEntryId) return;
 
     const canvas = document.createElement('canvas');
     const video = videoRef.current;
     
+    // Проверка, что видео реально идет (width > 0)
+    if (video.videoWidth === 0 || video.videoHeight === 0) return;
+
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
 
@@ -66,55 +87,55 @@ export const useScreenTracker = ({ intervalMs, uploadUrl, timeEntryId }: Tracker
       if (!blob) return;
 
       const formData = new FormData();
-      // 'screenshot' — имя поля, которое ждет Hubnity (по Swagger)
       formData.append('screenshot', blob, `screen-${Date.now()}.jpg`);
-      // ОБЯЗАТЕЛЬНО привязываем к задаче
       formData.append('timeEntryId', timeEntryId); 
 
-      console.log(`📸 Отправка скриншота для задачи ${timeEntryId}...`);
+      console.log(`📸 Отправка скриншота...`);
 
       try {
-        const res = await fetch(uploadUrl, {
+        await fetch(uploadUrl, {
           method: 'POST',
-          body: formData, // Headers для FormData браузер ставит сам
+          body: formData,
         });
-        
-        if (!res.ok) {
-            const err = await res.text();
-            console.error('Ошибка загрузки скриншота:', err);
-        } else {
-            console.log('✅ Скриншот успешно сохранен!');
-        }
       } catch (e) {
-        console.error('Ошибка сети при отправке скриншота:', e);
+        console.error('Ошибка отправки:', e);
       }
-    }, 'image/jpeg', 0.6); // Качество 0.6 достаточно
-  };
+    }, 'image/jpeg', 0.6);
+  }, [timeEntryId, uploadUrl]);
 
-  // 3. Управление таймером
+  // 3. Управление таймером съемки
   useEffect(() => {
     if (isTracking && timeEntryId) {
-      // Запускаем интервал съемки
+      // Делаем первый скриншот сразу через 2 секунды после старта
+      const initialTimeout = setTimeout(takeScreenshot, 2000);
+      
+      // И далее по интервалу
       intervalRef.current = setInterval(takeScreenshot, intervalMs);
+      
+      return () => {
+        clearTimeout(initialTimeout);
+        if (intervalRef.current) clearInterval(intervalRef.current);
+      };
     } else {
-      // Если трекинг выключили или пропал ID — чистим таймер
       if (intervalRef.current) clearInterval(intervalRef.current);
     }
-
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
-  }, [isTracking, timeEntryId, intervalMs]); // Перезапуск при смене ID или статуса
+  }, [isTracking, timeEntryId, intervalMs, takeScreenshot]);
 
   // 4. Остановка
-  const stopTracking = () => {
+  const stopTracking = useCallback(() => {
+    console.log('⏹ Остановка трекинга экрана');
     setIsTracking(false);
+    isRequestingRef.current = false; // На всякий случай сбрасываем
+
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => track.stop());
       streamRef.current = null;
     }
     if (intervalRef.current) clearInterval(intervalRef.current);
-  };
+    if (videoRef.current) {
+        videoRef.current.srcObject = null;
+    }
+  }, []);
 
   return { startTracking, stopTracking, isTracking, videoRef };
 };
