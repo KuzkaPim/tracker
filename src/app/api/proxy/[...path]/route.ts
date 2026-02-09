@@ -29,7 +29,7 @@ async function proxy(req: Request, { params }: { params: Promise<{ path: string[
       },
       body: body,
       duplex: 'half', 
-    });
+    } as RequestInit & { duplex: string });
 
     const data = await res.blob(); 
     return new NextResponse(data, {
@@ -40,13 +40,13 @@ async function proxy(req: Request, { params }: { params: Promise<{ path: string[
     });
 
   } catch (error: unknown) {
-	console.error('[Proxy Error]:', error);
+    console.error('[Proxy Error]:', error);
 
-	if (error instanceof Error) {
-		return NextResponse.json({ error: error.message }, { status: 500 });
-	} else {
-		return NextResponse.json({ error: 'Unknown error' }, { status: 500 });
-	}
+    if (error instanceof Error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    } else {
+      return NextResponse.json({ error: 'Unknown error' }, { status: 500 });
+    }
   }
 }
 

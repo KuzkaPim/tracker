@@ -49,7 +49,7 @@ export const Dashboard = () => {
   useEffect(() => { 
     checkActiveTimer();
     fetchTotalTime();
-  }, []);
+  }, [checkActiveTimer, fetchTotalTime]);
 
   useEffect(() => {
     if (isRunning && !wasStoppedManuallyRef.current) {

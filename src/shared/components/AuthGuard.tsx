@@ -13,7 +13,13 @@ export const AuthGuard = ({ children }: AuthGuardProps) => {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const [ready, setReady] = useState(false);
 
-  useEffect(() => { setReady(true); }, []);
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      setReady(true);
+    });
+    
+    return () => cancelAnimationFrame(frame);
+  }, []);
 
   useEffect(() => {
     if (ready && !isAuthenticated) {
